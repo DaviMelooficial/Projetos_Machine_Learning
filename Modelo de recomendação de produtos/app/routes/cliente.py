@@ -3,18 +3,19 @@ from app.services.cliente_service import (
     criar_cliente, listar_clientes, obter_cliente, atualizar_cliente, deletar_cliente
 )
 from app.services.pre_processamento import recomendar_produtos_para_cliente
+from app.database import SessionLocal
 
 cliente_bp = Blueprint('cliente', __name__)
 
 # Rota para criar um novo cliente
-@cliente_bp.route('/clientes', methods=['POST'])
+@cliente_bp.route('/cadastrar_clientes', methods=['POST'])
 def criar():
     dados = request.json
     cliente = criar_cliente(dados)
     return jsonify({'id': cliente.id}), 201
 
 # Rota para listar todos os clientes
-@cliente_bp.route('/clientes', methods=['GET'])
+@cliente_bp.route('/listar_clientes', methods=['GET'])
 def listar():
     clientes = listar_clientes()
     return jsonify([{
@@ -62,7 +63,7 @@ def obter(cliente_id):
     })
 
 # Rota para atualizar um cliente existente
-@cliente_bp.route('/clientes/<int:cliente_id>', methods=['PUT'])
+@cliente_bp.route('/atualizar_clientes/<int:cliente_id>', methods=['PUT'])
 def atualizar(cliente_id):
     dados = request.json
     cliente = atualizar_cliente(cliente_id, dados)
@@ -71,7 +72,7 @@ def atualizar(cliente_id):
     return jsonify({'mensagem': 'Cliente atualizado com sucesso'})
 
 # Rota para deletar um cliente pelo ID
-@cliente_bp.route('/clientes/<int:cliente_id>', methods=['DELETE'])
+@cliente_bp.route('/deletar_clientes/<int:cliente_id>', methods=['DELETE'])
 def deletar(cliente_id):
     sucesso = deletar_cliente(cliente_id)
     if not sucesso:
@@ -86,7 +87,7 @@ def recomendar_para_cliente(cliente_id):
         return jsonify({'erro': 'Cliente não encontrado'}), 404
 
     # Monta os dados necessários para o modelo
-    dados_para_treino = {
+    dados_cliente = {
         'Idade': cliente.idade,
         'Recência': cliente.recencia,
         'Frequência': cliente.frequencia,
@@ -100,6 +101,14 @@ def recomendar_para_cliente(cliente_id):
     }
 
     # Chama a função de recomendação e retorna o resultado
-    resultado = recomendar_produtos_para_cliente(dados_para_treino)
-    
+    resultado = recomendar_produtos_para_cliente(dados_cliente)
+
+    # Atualiza o cluster do cliente no banco de dados
+    db = SessionLocal()
+    cliente_db = db.query(type(cliente)).filter_by(id=cliente.id).first()
+    if cliente_db:
+        cliente_db.cluster = resultado['Cluster previsto']
+        db.commit()
+    db.close()
+
     return jsonify(resultado)
